@@ -2,9 +2,10 @@
 
 Size of each entry and number of entries must be provided out of band, e.g. in the filename.
 
-Standard filename format:
+Therefore a standard filename format is needed.
 
-  _whatever_._key size_-_payload size_-_table size_.thht
+Standard filename format: _whatever_._key size_-_payload size_-_table size_.thht
+e.g. stored-blobs.20-0-1024.thht
 
 Primary use cases:
 
