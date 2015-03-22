@@ -1,12 +1,15 @@
 #!/usr/bin/env rdmd
 
+import std.algorithm : min;
 import std.string : format;
 import std.conv : octal;
-import std.stdio : writeln;
+import std.stdio : SEEK_END;
 
 import core.sys.posix.sys.stat : fstat, stat_t;
-import core.sys.posix.sys.mman;
+import core.sys.posix.sys.mman : mmap, PROT_READ, MAP_SHARED, MAP_FAILED;
+import core.sys.posix.sys.types : off_t;
 import core.sys.posix.fcntl : fcntl_open = open, O_CREAT;
+import core.sys.posix.unistd : write, lseek;
 
 struct Entry {
     byte[] key;
@@ -62,7 +65,7 @@ class RandomAccessFile {
         }
     }
     
-    byte[] get(long offset, size_t size) {
+    byte[] get(off_t offset, size_t size) {
         byte[] result = new byte[size];
         byte *ptr = cast(byte *)at(offset);
         if( ptr == null ) {
@@ -72,8 +75,23 @@ class RandomAccessFile {
         return result;
     }
     
-    void put(long offset, byte[] data) {
-        
+    void expandFile( off_t targetSize ) {
+        const int bufSize = 1024;
+        byte[bufSize] zeroes;
+        lseek(fd, 0, SEEK_END);
+        while( fileSize < targetSize ) {
+            off_t expandBy = min(bufSize, targetSize - fileSize);
+            write(fd, cast(void *)zeroes, cast(uint)expandBy);
+            fileSize += expandBy;
+        }
+    }
+    
+    void put(off_t offset, byte[] data) {
+        expandFile( offset + data.length );
+        write(0, format("Expanded to %d\n", fileSize));
+        // TODO: Crash if can't be casted
+        int off = cast(int)offset;
+        begin[off..off+data.length] = data;
     }
 }
 
@@ -90,10 +108,15 @@ class THHTFFile : RandomAccessFile {
     */
 }
 
+void write( int fh, string s ) {
+    write(fh, cast(byte *)s, s.length);
+}
+
 void main() {
     Entry e = Entry( cast(byte[])"abc", cast(byte[])"def" );
     RandomAccessFile raf = RandomAccessFile.open("blah.dat", false);
-    writeln("File size: ", raf.size);
+    write(0, format("File size: %d\n", raf.size));
+    raf.put(raf.size, cast(byte[])"WHAT");
     byte[] data = raf.get(raf.size-4, 4);
-    writeln("Got some data! ", data);
+    write(0, format("Got some data! %s\n", cast(string)data));
 }
