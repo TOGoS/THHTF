@@ -89,6 +89,8 @@ class MMapped {
     
     struct Rang {
         off_t begin, end;
+        
+        @property off_t length() { return end - begin; }
     }
     
     Rang opSlice(int pos)(off_t begin, off_t end) {
@@ -99,12 +101,11 @@ class MMapped {
         return get( rang.begin, cast(size_t)(rang.end-rang.begin) );
     }
 
-    /* Apparently I'm doing something wrong.  opIndex works but I get a
-    byte[] opIndexOpAssign(string op)( byte[] data, Rang rang ) {
+    byte[] opIndexAssign( byte[] data, Rang rang ) {
+        assert(data.length == rang.length);
         put( rang.begin, data );
         return data;
     }
-    */
 }
 
 unittest {
@@ -122,9 +123,7 @@ unittest {
     string filename = "." ~ randomString(10) ~ ".temp";
     MMapped raf = MMapped.open(filename, true);
     string randomData = randomString(10);
-    raf.put(20, cast(byte[])randomData);
-    // This doesn't compile for some reason!:
-    //raf[20..30] = cast(byte[])randomData;
+    raf[20..30] = cast(byte[])randomData;
     assert(raf.size == 30);
     assert(raf[0..20] == new byte[20]);
     assert(raf[20..30] == cast(byte[])randomData);
