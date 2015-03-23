@@ -86,6 +86,25 @@ class MMapped {
         int off = cast(int)offset;
         begin[off..off+data.length] = data;
     }
+    
+    struct Rang {
+        off_t begin, end;
+    }
+    
+    Rang opSlice(int pos)(off_t begin, off_t end) {
+        return Rang(begin, end);
+    }
+    
+    byte[] opIndex( Rang rang ) {
+        return get( rang.begin, cast(size_t)(rang.end-rang.begin) );
+    }
+
+    /* Apparently I'm doing something wrong.  opIndex works but I get a
+    byte[] opIndexOpAssign(string op)( byte[] data, Rang rang ) {
+        put( rang.begin, data );
+        return data;
+    }
+    */
 }
 
 unittest {
@@ -103,8 +122,10 @@ unittest {
     string filename = "." ~ randomString(10) ~ ".temp";
     MMapped raf = MMapped.open(filename, true);
     string randomData = randomString(10);
-    raf.put( 20, cast(byte[])randomData );
+    raf.put(20, cast(byte[])randomData);
+    // This doesn't compile for some reason!:
+    //raf[20..30] = cast(byte[])randomData;
     assert(raf.size == 30);
-    assert(raf.get(0, 20) == new byte[20]);
-    assert(raf.get(20, 10) == cast(byte[])randomData);
+    assert(raf[0..20] == new byte[20]);
+    assert(raf[20..30] == cast(byte[])randomData);
 }
