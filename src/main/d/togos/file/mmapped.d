@@ -1,22 +1,15 @@
-#!/usr/bin/env rdmd
+module togos.file.mmapped;
 
-import std.algorithm : min;
+import togos.errutil : errstr;
 import std.string : format;
-import std.conv : octal, to;
-import std.stdio : SEEK_END;
-import core.stdc.string : strerror;
-import core.stdc.errno : errno;
+import std.conv : octal;
 import core.sys.posix.sys.stat : fstat, stat_t;
 import core.sys.posix.sys.mman : mmap, PROT_READ, PROT_WRITE, MAP_SHARED, MAP_FAILED;
 import core.sys.posix.sys.types : off_t;
 import core.sys.posix.fcntl : fcntl_open = open, O_CREAT, O_RDONLY, O_WRONLY, O_RDWR, O_APPEND;
 import core.sys.posix.unistd : write, ftruncate, lseek, sync, close;
 
-string errstr() {
-    return to!string(strerror(errno));
-}
-
-class RandomAccessFile {
+class MMapped {
     int fd;
     off_t fileSize;
     void *begin;
@@ -37,7 +30,7 @@ class RandomAccessFile {
     
     @property off_t size() { return fileSize; }
     
-    static RandomAccessFile open(string filename, int openFlags, int openMode, int prot, int flags) {
+    static MMapped open(string filename, int openFlags, int openMode, int prot, int flags) {
         int fd = fcntl_open(cast(const char*)filename, openFlags, openMode);
         void *begin = MAP_FAILED;
         size_t length = 1<<31;
@@ -51,10 +44,10 @@ class RandomAccessFile {
         
         if( begin == MAP_FAILED ) throw new Exception(format("Failed to mmap '%s' from 0 to 0x%x", filename, length));
         void *end = begin + length;
-        return new RandomAccessFile(fd, begin, end, (openFlags&(O_RDWR|O_WRONLY)) != 0);
+        return new MMapped(fd, begin, end, (openFlags&(O_RDWR|O_WRONLY)) != 0);
     }
     
-    static RandomAccessFile open(string filename, bool writable) {
+    static MMapped open(string filename, bool writable) {
         // TODO: See if these flags are right
         return open(filename, writable?(O_CREAT|O_RDWR):O_RDONLY, octal!644, PROT_READ|(writable?PROT_WRITE:0), MAP_SHARED);
     }
@@ -95,63 +88,23 @@ class RandomAccessFile {
     }
 }
 
-import std.algorithm : fill;
-import std.ascii : letters;
-import std.random : randomCover, rndGen;
-
-string randomString(int length) {
-    dchar[] str = new dchar[length];
-    fill(str, randomCover(to!(dchar[])(letters), rndGen));
-    return to!(string)(str);
-}
-
 unittest {
+    import std.algorithm : fill;
+    import std.ascii : letters;
+    import std.conv : to;
+    import std.random : randomCover, rndGen;
+    
+    string randomString(int length) {
+        dchar[] str = new dchar[length];
+        fill(str, randomCover(to!(dchar[])(letters), rndGen));
+        return to!(string)(str);
+    }
+
     string filename = "." ~ randomString(10) ~ ".temp";
-    RandomAccessFile raf = RandomAccessFile.open(filename, true);
+    MMapped raf = MMapped.open(filename, true);
     string randomData = randomString(10);
     raf.put( 20, cast(byte[])randomData );
     assert(raf.size == 30);
     assert(raf.get(0, 20) == new byte[20]);
     assert(raf.get(20, 10) == cast(byte[])randomData);
 }
-
-struct Entry {
-    byte[] key;
-    byte[] value;
-}
-
-class THHTFFile : RandomAccessFile {
-    this(int fd, void *begin, void *end, bool writable) {
-        super(fd, begin, end, writable);
-    }
-    /*
-    static THHTFFile open( string filename, bool writeable ) {
-    }
-    
-    Entry find( byte[] key ) {
-    }
-    */
-}
-
-void write( int fh, string s ) {
-    write(fh, cast(byte *)s, s.length);
-}
-
-void main() {
-    Entry e = Entry( cast(byte[])"abc", cast(byte[])"def" );
-    RandomAccessFile raf = RandomAccessFile.open("blah.dat", true);
-    write(0, format("File size: %d\n", raf.size));
-    raf.put(raf.size, cast(byte[])"WHAT");
-    byte[] data = raf.get(raf.size-4, 4);
-    write(0, format("Got some data! %s\n", cast(string)data));
-}
-
-/*
-void main() {
-    int fd = fcntl_open("blax.dat", O_CREAT|O_RDWR|O_APPEND, octal!644);
-    if( fd < 0 ) throw new Exception(format("Failed to open file because %s", errstr()));
-    //    lseek(fd, 0, SEEK_END);
-    if( write(fd, cast(byte*)"Hi", 2) <= 0 ) throw new Exception(format("Failed to write anything: %s", errstr()));
-    close(fd);
-}
-*/
