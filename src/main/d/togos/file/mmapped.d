@@ -9,6 +9,11 @@ import core.sys.posix.sys.types : off_t;
 import core.sys.posix.fcntl : fcntl_open = open, O_CREAT, O_RDONLY, O_WRONLY, O_RDWR, O_APPEND;
 import core.sys.posix.unistd : write, ftruncate, lseek, sync, close;
 
+void logDebug(string str) {
+    byte[] b = cast(byte[])(str ~ "\n");
+    write(1, cast(byte*)b, b.length);
+}
+
 class MMapped {
     int fd;
     off_t fileSize;
@@ -53,6 +58,7 @@ class MMapped {
     }
     
     void *at(long offset) {
+        // TODO: Make sure we can represent that location as a void *
         if( begin + offset > end ) {
             return null;
         } else {
@@ -82,9 +88,8 @@ class MMapped {
     void put(off_t offset, byte[] data) {
         if( !writable ) throw new Exception("Not opened writably.");
         expandFile( offset + data.length );
-        // TODO: Crash if can't be casted
-        int off = cast(int)offset;
-        begin[off..off+data.length] = data;
+        byte *d = cast(byte*)at(offset);
+        d[0..data.length] = data;
     }
     
     struct Rang {
