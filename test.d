@@ -10,7 +10,7 @@ import core.sys.posix.sys.stat : fstat, stat_t;
 import core.sys.posix.sys.mman : mmap, PROT_READ, PROT_WRITE, MAP_SHARED, MAP_FAILED;
 import core.sys.posix.sys.types : off_t;
 import core.sys.posix.fcntl : fcntl_open = open, O_CREAT, O_RDONLY, O_WRONLY, O_RDWR, O_APPEND;
-import core.sys.posix.unistd : write, lseek, sync, close;
+import core.sys.posix.unistd : write, ftruncate, lseek, sync, close;
 
 string errstr() {
     return to!string(strerror(errno));
@@ -79,41 +79,40 @@ class RandomAccessFile {
     
     void expandFile( off_t targetSize ) {
         if( fileSize >= targetSize ) return;
-        
-        //munmap(begin, end-begin);
-        
-        const int bufSize = 1024;
-        byte[bufSize] zeroes;
-        off_t z = lseek(fd, 0, SEEK_END);
-        if( z == -1 ) {
-            throw new Exception("Failed to lseek to end of file");
+            
+        if( ftruncate(fd, targetSize) ) {
+            throw new Exception(format("ftruncate to %d failed: %s", targetSize, errstr()));
         }
-        while( fileSize < targetSize ) {
-            off_t expandBy = min(bufSize, targetSize - fileSize);
-            z = write(fd, cast(void *)zeroes, cast(uint)expandBy);
-            if( z <= 0 ) {
-                throw new Exception(format("Failed to write %d bytes to end of file: %s", expandBy, errstr()));
-            }
-            fileSize += z;
-        }
-        close(fd);
-        sync();
-        
-        /*
-        begin = mmap(begin, end-begin, prot, flags, fd, 0);
-        if( begin == MAP_FAILED && length >= 0x200000 ) {
-        mmap(begin,
-        */
+        fileSize = targetSize;
     }
     
     void put(off_t offset, byte[] data) {
         if( !writable ) throw new Exception("Not opened writably.");
         expandFile( offset + data.length );
-        write(0, format("Expanded to %d\n", fileSize));
         // TODO: Crash if can't be casted
         int off = cast(int)offset;
-        //begin[off..off+data.length] = data;
+        begin[off..off+data.length] = data;
     }
+}
+
+import std.algorithm : fill;
+import std.ascii : letters;
+import std.random : randomCover, rndGen;
+
+string randomString(int length) {
+    dchar[] str = new dchar[length];
+    fill(str, randomCover(to!(dchar[])(letters), rndGen));
+    return to!(string)(str);
+}
+
+unittest {
+    string filename = "." ~ randomString(10) ~ ".temp";
+    RandomAccessFile raf = RandomAccessFile.open(filename, true);
+    string randomData = randomString(10);
+    raf.put( 20, cast(byte[])randomData );
+    assert(raf.size == 30);
+    assert(raf.get(0, 20) == new byte[20]);
+    assert(raf.get(20, 10) == cast(byte[])randomData);
 }
 
 struct Entry {
