@@ -2,18 +2,18 @@
 
 import std.algorithm : min;
 import std.string : format;
-import std.conv : octal;
+import std.conv : octal, to;
 import std.stdio : SEEK_END;
-
+import core.stdc.string : strerror;
+import core.stdc.errno : errno;
 import core.sys.posix.sys.stat : fstat, stat_t;
-import core.sys.posix.sys.mman : mmap, PROT_READ, MAP_SHARED, MAP_FAILED;
+import core.sys.posix.sys.mman : mmap, PROT_READ, PROT_WRITE, MAP_SHARED, MAP_FAILED;
 import core.sys.posix.sys.types : off_t;
-import core.sys.posix.fcntl : fcntl_open = open, O_CREAT;
-import core.sys.posix.unistd : write, lseek;
+import core.sys.posix.fcntl : fcntl_open = open, O_CREAT, O_RDONLY, O_WRONLY, O_RDWR, O_APPEND;
+import core.sys.posix.unistd : write, lseek, sync, close;
 
-struct Entry {
-    byte[] key;
-    byte[] value;
+string errstr() {
+    return to!string(strerror(errno));
 }
 
 class RandomAccessFile {
@@ -21,11 +21,13 @@ class RandomAccessFile {
     off_t fileSize;
     void *begin;
     void *end;
+    bool writable;
     
-    this(int fd, void *begin, void *end) {
+    this(int fd, void *begin, void *end, bool writable) {
         this.fd = fd;
         this.begin = begin;
         this.end = end;
+        this.writable = writable;
         stat_t theStat;
         if( fstat(fd, &theStat) ) {
             throw new Exception("Failed to fstat.  <TODO: put error message here>");
@@ -49,12 +51,12 @@ class RandomAccessFile {
         
         if( begin == MAP_FAILED ) throw new Exception(format("Failed to mmap '%s' from 0 to 0x%x", filename, length));
         void *end = begin + length;
-        return new RandomAccessFile(fd, begin, end);
+        return new RandomAccessFile(fd, begin, end, (openFlags&(O_RDWR|O_WRONLY)) != 0);
     }
     
     static RandomAccessFile open(string filename, bool writable) {
         // TODO: See if these flags are right
-        return open(filename, writable?O_CREAT:0, octal!644, PROT_READ, MAP_SHARED);
+        return open(filename, writable?(O_CREAT|O_RDWR):O_RDONLY, octal!644, PROT_READ|(writable?PROT_WRITE:0), MAP_SHARED);
     }
     
     void *at(long offset) {
@@ -76,28 +78,52 @@ class RandomAccessFile {
     }
     
     void expandFile( off_t targetSize ) {
+        if( fileSize >= targetSize ) return;
+        
+        //munmap(begin, end-begin);
+        
         const int bufSize = 1024;
         byte[bufSize] zeroes;
-        lseek(fd, 0, SEEK_END);
+        off_t z = lseek(fd, 0, SEEK_END);
+        if( z == -1 ) {
+            throw new Exception("Failed to lseek to end of file");
+        }
         while( fileSize < targetSize ) {
             off_t expandBy = min(bufSize, targetSize - fileSize);
-            write(fd, cast(void *)zeroes, cast(uint)expandBy);
-            fileSize += expandBy;
+            z = write(fd, cast(void *)zeroes, cast(uint)expandBy);
+            if( z <= 0 ) {
+                throw new Exception(format("Failed to write %d bytes to end of file: %s", expandBy, errstr()));
+            }
+            fileSize += z;
         }
+        close(fd);
+        sync();
+        
+        /*
+        begin = mmap(begin, end-begin, prot, flags, fd, 0);
+        if( begin == MAP_FAILED && length >= 0x200000 ) {
+        mmap(begin,
+        */
     }
     
     void put(off_t offset, byte[] data) {
+        if( !writable ) throw new Exception("Not opened writably.");
         expandFile( offset + data.length );
         write(0, format("Expanded to %d\n", fileSize));
         // TODO: Crash if can't be casted
         int off = cast(int)offset;
-        begin[off..off+data.length] = data;
+        //begin[off..off+data.length] = data;
     }
 }
 
+struct Entry {
+    byte[] key;
+    byte[] value;
+}
+
 class THHTFFile : RandomAccessFile {
-    this(int fd, void *begin, void *end) {
-        super(fd, begin, end);
+    this(int fd, void *begin, void *end, bool writable) {
+        super(fd, begin, end, writable);
     }
     /*
     static THHTFFile open( string filename, bool writeable ) {
@@ -114,9 +140,19 @@ void write( int fh, string s ) {
 
 void main() {
     Entry e = Entry( cast(byte[])"abc", cast(byte[])"def" );
-    RandomAccessFile raf = RandomAccessFile.open("blah.dat", false);
+    RandomAccessFile raf = RandomAccessFile.open("blah.dat", true);
     write(0, format("File size: %d\n", raf.size));
     raf.put(raf.size, cast(byte[])"WHAT");
     byte[] data = raf.get(raf.size-4, 4);
     write(0, format("Got some data! %s\n", cast(string)data));
 }
+
+/*
+void main() {
+    int fd = fcntl_open("blax.dat", O_CREAT|O_RDWR|O_APPEND, octal!644);
+    if( fd < 0 ) throw new Exception(format("Failed to open file because %s", errstr()));
+    //    lseek(fd, 0, SEEK_END);
+    if( write(fd, cast(byte*)"Hi", 2) <= 0 ) throw new Exception(format("Failed to write anything: %s", errstr()));
+    close(fd);
+}
+*/
