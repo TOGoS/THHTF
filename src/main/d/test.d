@@ -5,11 +5,7 @@ import std.string : format;
 import core.sys.posix.unistd : write;
 import core.sys.posix.sys.types : off_t;
 import togos.file.mmapped : MMapped;
-
-void logDebug(string str) {
-    byte[] b = cast(byte[])(str ~ "\n");
-    write(1, cast(byte*)b, b.length);
-}
+import togos.debugutil : logDebug;
 
 struct Entry {
     off_t offset;

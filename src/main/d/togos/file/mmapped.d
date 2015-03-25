@@ -8,11 +8,7 @@ import core.sys.posix.sys.mman : mmap, PROT_READ, PROT_WRITE, MAP_SHARED, MAP_FA
 import core.sys.posix.sys.types : off_t;
 import core.sys.posix.fcntl : fcntl_open = open, O_CREAT, O_RDONLY, O_WRONLY, O_RDWR, O_APPEND;
 import core.sys.posix.unistd : write, ftruncate, lseek, sync, close;
-
-void logDebug(string str) {
-    byte[] b = cast(byte[])(str ~ "\n");
-    write(1, cast(byte*)b, b.length);
-}
+import togos.debugutil : logDebug;
 
 class MMapped {
     int fd;
