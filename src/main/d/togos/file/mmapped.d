@@ -90,9 +90,8 @@ class MMapped {
     }
     
     struct Rang {
-        off_t begin, end;
-        
-        @property off_t length() { return end - begin; }
+        ulong begin, end;
+        @property ulong length() { return end - begin; }
     }
     
     Rang opSlice(int pos)(off_t begin, off_t end) {
@@ -100,7 +99,8 @@ class MMapped {
     }
     
     byte[] opIndex( Rang rang ) {
-        return get( rang.begin, cast(size_t)(rang.end-rang.begin) );
+        // TODO: Cast more safely
+        return (cast(byte*)begin)[cast(uint)rang.begin..cast(uint)rang.end];
     }
 
     byte[] opIndexAssign( byte[] data, Rang rang ) {
