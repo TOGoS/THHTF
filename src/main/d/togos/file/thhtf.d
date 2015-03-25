@@ -11,13 +11,15 @@ struct Entry {
 }
 
 class THHTFFile {
-    MMapped fayal;
+    const string filename;
     const size_t keySize, valueSize;
     const int rowLength, slop;
     const byte[] emptyKey;
+    MMapped fayal;
     
-    this(MMapped fayal, size_t keySize, size_t valueSize, int rowLength, int slop ) {
+    this(string filename, MMapped fayal, size_t keySize, size_t valueSize, int rowLength, int slop ) {
         assert(rowLength > 0);
+        this.filename = filename;
         this.fayal = fayal;
         this.keySize = keySize;
         this.valueSize = valueSize;
@@ -26,7 +28,7 @@ class THHTFFile {
         this.emptyKey = new byte[keySize];
     }
     
-    static string filename(string basename, size_t keySize, size_t valueSize, int rowLength, int slop) {
+    static string generateFilename(string basename, size_t keySize, size_t valueSize, int rowLength, int slop) {
         if( slop == 0 ) {
             return format("%s.%d-%d-%d.thht", basename, keySize, valueSize, rowLength);
         } else {
@@ -35,8 +37,9 @@ class THHTFFile {
     }
     
     static THHTFFile open(string basename, size_t keySize, size_t valueSize, int rowLength, int slop, bool writable) {
-        MMapped f = MMapped.open(filename(basename, keySize, valueSize, rowLength, slop), writable);
-        return new this(f, keySize, valueSize, rowLength, slop);
+        string filename = generateFilename(basename, keySize, valueSize, rowLength, slop);
+        MMapped f = MMapped.open(filename, writable);
+        return new this(filename, f, keySize, valueSize, rowLength, slop);
     }
     
     @property size_t entrySize() { return keySize + valueSize; }
@@ -99,6 +102,7 @@ unittest {
     import std.algorithm : fill;
     import std.ascii : letters;
     import std.conv : to;
+    import std.file : remove;
     import std.random : randomCover, rndGen;
     
     string randomString(int length) {
@@ -116,4 +120,6 @@ unittest {
     assert(cast(byte[])[ 9] == tf.get([1,2,3,5]));
     assert(cast(byte[])[ 8] == tf.get([1,2,3,4]));
     assert(cast(byte[])[12] == tf.get([5,2,3,4]));
+    
+    remove(tf.filename);
 }

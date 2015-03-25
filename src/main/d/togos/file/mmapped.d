@@ -1,6 +1,7 @@
 module togos.file.mmapped;
 
 import togos.errutil : errstr;
+import std.file : remove;
 import std.string : format;
 import std.conv : octal;
 import core.sys.posix.sys.stat : fstat, stat_t;
@@ -114,6 +115,7 @@ unittest {
     import std.ascii : letters;
     import std.conv : to;
     import std.random : randomCover, rndGen;
+    import core.sys.posix.unistd : unlink;
     
     string randomString(int length) {
         dchar[] str = new dchar[length];
@@ -121,11 +123,13 @@ unittest {
         return to!(string)(str);
     }
 
-    string filename = "." ~ randomString(10) ~ ".temp";
+    string filename = ".temp-" ~ randomString(10) ~ ".dat";
     MMapped raf = MMapped.open(filename, true);
     string randomData = randomString(10);
     raf[20..30] = cast(byte[])randomData;
     assert(raf.size == 30);
     assert(raf[0..20] == new byte[20]);
     assert(raf[20..30] == cast(byte[])randomData);
+    
+    remove(filename);
 }
