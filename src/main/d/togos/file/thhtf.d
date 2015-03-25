@@ -1,11 +1,8 @@
-#!/usr/bin/env rdmd
+module togos.file.thhtf;
 
-import std.conv : to;
 import std.string : format;
-import core.sys.posix.unistd : write;
 import core.sys.posix.sys.types : off_t;
 import togos.file.mmapped : MMapped;
-import togos.debugutil : logDebug;
 
 struct Entry {
     off_t offset;
@@ -98,18 +95,6 @@ class THHTFFile {
     }
 }
 
-void write( int fh, string s ) {
-    write(fh, cast(byte *)s, s.length);
-}
-
-/** Make sure array comparisons work like I expect */
-unittest {
-    byte[] a = new byte[3];
-    a[1] = 100;
-    byte[] b = a[0..2];
-    assert((cast(byte*)a)[0..2] == b);
-}
-
 unittest {
     import std.algorithm : fill;
     import std.ascii : letters;
@@ -131,15 +116,4 @@ unittest {
     assert(cast(byte[])[ 9] == tf.get([1,2,3,5]));
     assert(cast(byte[])[ 8] == tf.get([1,2,3,4]));
     assert(cast(byte[])[12] == tf.get([5,2,3,4]));
-}
-
-void main() {
-    /*
-    Entry e = Entry( cast(byte[])"abc", cast(byte[])"def" );
-    MMapped raf = MMapped.open("blah.dat", true);
-    write(0, format("File size: %d\n", raf.size));
-    raf.put(raf.size, cast(byte[])"WHAT");
-    byte[] data = raf.get(raf.size-4, 4);
-    write(0, format("Got some data! %s\n", cast(string)data));
-    */
 }

@@ -1,3 +1,2 @@
-default:
-	rdmd -Isrc/main/d -unittest src/main/d/test.d
-	rm -f .temp* .*.temp
+run-unit-tests:
+	rdmd -Isrc/main/d -main -unittest src/main/d/togos/file/thhtf.d
