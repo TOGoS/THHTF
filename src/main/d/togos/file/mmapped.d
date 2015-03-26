@@ -8,7 +8,7 @@ import core.sys.posix.sys.stat : fstat, stat_t;
 import core.sys.posix.sys.mman : mmap, PROT_READ, PROT_WRITE, MAP_SHARED, MAP_FAILED;
 import core.sys.posix.sys.types : off_t;
 import core.sys.posix.fcntl : fcntl_open = open, O_CREAT, O_RDONLY, O_WRONLY, O_RDWR, O_APPEND;
-import core.sys.posix.unistd : write, ftruncate, lseek, sync, close;
+import core.sys.posix.unistd : write, ftruncate, lseek, sync, unistd_close = close;
 import togos.debugutil : logDebug;
 
 class MMapped {
@@ -63,13 +63,13 @@ class MMapped {
         }
     }
     
-    byte[] get(off_t offset, size_t size) {
-        byte[] result = new byte[size];
-        byte *ptr = cast(byte *)at(offset);
+    ubyte[] get(off_t offset, size_t size) {
+        ubyte[] result = new ubyte[size];
+        ubyte* ptr = cast(ubyte*)at(offset);
         if( ptr == null ) {
             throw new Exception(format("Failed to turn offset 0x%x into a memory location; begin=0x%x, end=0x%x", offset, begin, end));
         }
-        result[0..size] = (cast(byte *)at(offset))[0..size];
+        result[0..size] = (cast(ubyte*)at(offset))[0..size];
         return result;
     }
     
@@ -82,10 +82,10 @@ class MMapped {
         fileSize = targetSize;
     }
     
-    void put(off_t offset, byte[] data) {
+    void put(off_t offset, ubyte[] data) {
         if( !writable ) throw new Exception("Not opened writably.");
         expandFile( offset + data.length );
-        byte *d = cast(byte*)at(offset);
+        ubyte* d = cast(ubyte*)at(offset);
         d[0..data.length] = data;
     }
     
@@ -98,15 +98,19 @@ class MMapped {
         return Rang(begin, end);
     }
     
-    byte[] opIndex( Rang rang ) {
+    ubyte[] opIndex( Rang rang ) {
         // TODO: Cast more safely
-        return (cast(byte*)begin)[cast(uint)rang.begin..cast(uint)rang.end];
+        return (cast(ubyte*)begin)[cast(uint)rang.begin..cast(uint)rang.end];
     }
 
-    byte[] opIndexAssign( byte[] data, Rang rang ) {
+    ubyte[] opIndexAssign( ubyte[] data, Rang rang ) {
         assert(data.length == rang.length);
         put( rang.begin, data );
         return data;
+    }
+    
+    void close() {
+        unistd_close(fd);
     }
 }
 
@@ -126,10 +130,11 @@ unittest {
     string filename = ".temp-" ~ randomString(10) ~ ".dat";
     MMapped raf = MMapped.open(filename, true);
     string randomData = randomString(10);
-    raf[20..30] = cast(byte[])randomData;
+    raf[20..30] = cast(ubyte[])randomData;
     assert(raf.size == 30);
-    assert(raf[0..20] == new byte[20]);
-    assert(raf[20..30] == cast(byte[])randomData);
+    assert(raf[0..20] == new ubyte[20]);
+    assert(raf[20..30] == cast(ubyte[])randomData);
     
+    raf.close();
     remove(filename);
 }
