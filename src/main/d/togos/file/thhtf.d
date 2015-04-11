@@ -169,7 +169,7 @@ struct BlobOffsetRef {
     static BlobOffsetRef encode(ulong offset, uint size, uint flags) {
         return BlobOffsetRef(
             (cast(ulong)(flags & 0xF) << 60) |
-            (cast(ulong)(size & 0xFF) << 44) |
+            (cast(ulong)(size & 0xFFFF) << 44) |
             (offset & 0xFFFFFFFFFFF) );
     }
     
@@ -199,6 +199,9 @@ class THHTFBlobStore {
         size_t size = value.length;
         logDebug(format("Putting blob at 0x%x..0x%x",offset,offset+size));
         blobs[offset..offset+size] = value;
+        assert( blobs.size == offset + value.length,
+            format("Blob file size should have been increased by 0x%x bytes; "~
+                   "old size = 0x%x; new size = 0x%x", value.length, offset, blobs.size));
         logDebug("Blob put.");
         BlobOffsetRef bor = BlobOffsetRef.encode(offset, size, BlobOffsetRef.FLAG_RAW_AT_OFFSET);
         logDebug("Updating index...");
@@ -219,17 +222,19 @@ unittest {
     import std.random : randomCover, rndGen, uniform;
     import core.sys.posix.unistd : unlink;
     
-    ubyte[] randomByteString(int length) {
-        ubyte[] str = new ubyte[length];
-        for( int i=0; i<length; ++i ) {
-            str[i] = cast(ubyte)uniform(0,256);
-        }
-        return str;
-    }
     string randomString(int length) {
         dchar[] str = new dchar[length];
         fill(str, randomCover(to!(dchar[])(letters), rndGen));
         return to!(string)(str);
+    }
+    
+    ubyte[] randomByteString(int length) {
+        string s = randomString(length);
+        ubyte[] str = new ubyte[length];
+        for( int i=0; i<length; ++i ) {
+            str[i] = s[i];
+        }
+        return str;
     }
     
     int keyLength = 20;
@@ -253,6 +258,8 @@ unittest {
     }
     // Crash happens here ^
     for( int i=0; i<testPairs.length; ++i ) {
-        assert( testPairs[i].value == bs.get(testPairs[i].key) );
+        ubyte[] found = bs.get(testPairs[i].key);
+        assert( testPairs[i].value == found, format("Expected %s (0x%x bytes), but found %s (0x%x bytes)",
+            cast(char[])testPairs[i].value, testPairs[i].value.length, cast(char[])found, found.length) );
     }    
 }
