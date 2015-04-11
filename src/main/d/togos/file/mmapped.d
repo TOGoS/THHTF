@@ -54,7 +54,7 @@ class MMapped {
         return open(filename, writable?(O_CREAT|O_RDWR):O_RDONLY, octal!644, PROT_READ|(writable?PROT_WRITE:0), MAP_SHARED);
     }
     
-    void *at(long offset) {
+    void *at(ulong offset) {
         // TODO: Make sure we can represent that location as a void *
         if( begin + offset > end ) {
             return null;
@@ -75,18 +75,24 @@ class MMapped {
     
     void expandFile( off_t targetSize ) {
         if( fileSize >= targetSize ) return;
-            
+        
+        logDebug(format("Expanding file to 0x%x bytes", targetSize));
         if( ftruncate(fd, targetSize) ) {
             throw new Exception(format("ftruncate to %d failed: %s", targetSize, errstr()));
         }
+        logDebug("Expanded!");
         fileSize = targetSize;
     }
     
     void put(off_t offset, ubyte[] data) {
+        assert( offset >= 0 ); 
+        assert( end - (begin + offset + data.length) >= 0 );
         if( !writable ) throw new Exception("Not opened writably.");
         expandFile( offset + data.length );
         ubyte* d = cast(ubyte*)at(offset);
+        logDebug(format("Copying 0x%d bytes to 0x%x", data.length, d));
         d[0..data.length] = data;
+        logDebug(format("Copied."));
     }
     
     struct Rang {

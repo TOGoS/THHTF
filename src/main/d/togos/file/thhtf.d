@@ -15,38 +15,38 @@ struct Entry {
 class THHTFFile {
     const string filename;
     const size_t keySize, valueSize;
-    const int rowLength, slop;
+    const int entriesPerRow, slop;
     const ubyte[] emptyKey;
     MMapped fayal;
     
-    this(string filename, MMapped fayal, size_t keySize, size_t valueSize, int rowLength, int slop ) {
-        assert(rowLength > 0);
+    this(string filename, MMapped fayal, size_t keySize, size_t valueSize, int entriesPerRow, int slop ) {
+        assert(entriesPerRow > 0);
         assert(slop == 0); // Nonzero slop not yet implemented
         this.filename = filename;
         this.fayal = fayal;
         this.keySize = keySize;
         this.valueSize = valueSize;
-        this.rowLength = rowLength;
+        this.entriesPerRow = entriesPerRow;
         this.slop = slop;
         this.emptyKey = new ubyte[keySize];
     }
     
-    static string generateFilename(string basename, size_t keySize, size_t valueSize, int rowLength, int slop) {
+    static string generateFilename(string basename, size_t keySize, size_t valueSize, int entriesPerRow, int slop) {
         if( slop == 0 ) {
-            return format("%s.%d-%d-%d.thht", basename, keySize, valueSize, rowLength);
+            return format("%s.%d-%d-%d.thht", basename, keySize, valueSize, entriesPerRow);
         } else {
-            return format("%s.%d-%d-%d-%d.thht", basename, keySize, valueSize, rowLength, slop);
+            return format("%s.%d-%d-%d-%d.thht", basename, keySize, valueSize, entriesPerRow, slop);
         }
     }
     
-    static THHTFFile open(string basename, size_t keySize, size_t valueSize, int rowLength, int slop, bool writable) {
-        string filename = generateFilename(basename, keySize, valueSize, rowLength, slop);
+    static THHTFFile open(string basename, size_t keySize, size_t valueSize, int entriesPerRow, int slop, bool writable) {
+        string filename = generateFilename(basename, keySize, valueSize, entriesPerRow, slop);
         MMapped f = MMapped.open(filename, writable);
-        return new this(filename, f, keySize, valueSize, rowLength, slop);
+        return new this(filename, f, keySize, valueSize, entriesPerRow, slop);
     }
     
     @property size_t entrySize() { return keySize + valueSize; }
-    @property size_t rowSize() { return entrySize * rowLength; }
+    @property size_t rowSize() { return entrySize * entriesPerRow; }
     
     uint column(ubyte[] key) {
         uint c = cast(uint)(
@@ -54,7 +54,7 @@ class THHTFFile {
             (key[key.length-2]<< 8) |
             (key[key.length-3]<<16) |
             (key[key.length-4]<<24)
-        ) % this.rowLength;
+        ) % this.entriesPerRow;
         return c;
     }
     
@@ -87,11 +87,16 @@ class THHTFFile {
         assert(key.length == keySize);
         assert(value.length == valueSize);
         off_t i = column(key) * entrySize;
+        assert(i >= 0);
         while( i + entrySize <= fayal.size ) {
             ubyte *place = cast(ubyte*)fayal.at(i);
-            if( place[0..keySize] == key ) break;
+            if( place[0..keySize] == key ||
+                place[0..keySize] == emptyKey ) break;
+            logDebug(format("Slot not found at 0x%x; adding 0x%x", i, rowSize));
             i += rowSize;
         }
+        assert(i >= 0);
+        logDebug(format("Putting 0x%x bytes at 0x%x in index file", (key ~ value).length, i));
         fayal.put(i, key ~ value);
     }
     
@@ -192,7 +197,7 @@ class THHTFBlobStore {
     void put(ubyte[] key, ubyte[] value) {
         off_t offset = blobs.size;
         size_t size = value.length;
-        logDebug(format("Putting blob at %d",offset));
+        logDebug(format("Putting blob at 0x%x..0x%x",offset,offset+size));
         blobs[offset..offset+size] = value;
         logDebug("Blob put.");
         BlobOffsetRef bor = BlobOffsetRef.encode(offset, size, BlobOffsetRef.FLAG_RAW_AT_OFFSET);
