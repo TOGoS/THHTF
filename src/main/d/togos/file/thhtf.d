@@ -48,8 +48,8 @@ class THHTFFile {
     @property size_t entrySize() { return keySize + valueSize; }
     @property size_t rowSize() { return entrySize * rowLength; }
     
-    int column(ubyte[] key) {
-        int c = (
+    uint column(ubyte[] key) {
+        uint c = cast(uint)(
             (key[key.length-1]<< 0) |
             (key[key.length-2]<< 8) |
             (key[key.length-3]<<16) |
